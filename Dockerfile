@@ -9,6 +9,7 @@ WORKDIR /app
 # ---- Stage 2: Dependencies ----
 FROM base AS deps
 
+
 # Native build tools for sharp, @napi-rs/canvas
 RUN apk add --no-cache python3 build-base g++ cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev
 
