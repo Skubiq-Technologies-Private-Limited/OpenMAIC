@@ -1,6 +1,7 @@
 services:
   openmaic:
-    build: .
+    image: ${OPENMAIC_IMAGE:-ghcr.io/thu-maic/openmaic:main}
+    pull_policy: always
     container_name: openmaic_prod
     env_file:
       - .env.local

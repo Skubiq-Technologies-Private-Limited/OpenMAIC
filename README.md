@@ -237,7 +237,23 @@ Or manually:
 ```bash
 cp .env.example .env.local
 # Edit .env.local with your API keys, then:
-docker compose up --build
+docker compose up -d
+```
+
+By default, `docker-compose.yml` pulls prebuilt images from GHCR:
+
+- `ghcr.io/thu-maic/openmaic:main` (latest from `main`)
+- Override with `OPENMAIC_IMAGE`, for example:
+
+```bash
+OPENMAIC_IMAGE=ghcr.io/thu-maic/openmaic:v1.2.3 docker compose up -d
+```
+
+If you want to build locally instead:
+
+```bash
+docker build -t openmaic:local .
+OPENMAIC_IMAGE=openmaic:local docker compose up -d
 ```
 
 ### Optional: MinerU (Advanced Document Parsing)
