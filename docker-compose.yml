@@ -1,15 +1,17 @@
 services:
   openmaic:
     build: .
-    ports:
-      - "127.0.0.1:3000:3000"
+    container_name: openmaic_prod
     env_file:
       - .env.local
     volumes:
-      # Optional: mount server-providers.yml for provider config
-      # - ./server-providers.yml:/app/server-providers.yml:ro
-      - openmaic-data:/app/data
+      - ./data:/app/data
+    expose:
+      - "3000"
+    networks:
+      - edukube_default
     restart: unless-stopped
 
-volumes:
-  openmaic-data:
+networks:
+  edukube_default:
+    external: true
