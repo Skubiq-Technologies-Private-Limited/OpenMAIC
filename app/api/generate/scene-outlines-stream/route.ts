@@ -448,7 +448,7 @@ export async function POST(req: NextRequest) {
               OUTLINE_CACHE_ARTIFACT_KEY,
             );
             if (cached?.payloadJson) {
-              const payload = cached.payloadJson as CachedOutlineResult;
+              const payload = cached.payloadJson as unknown as CachedOutlineResult;
               if (payload.outlines?.length) {
                 log.debug(`Outline cache hit for course ${courseId}`);
                 for (const event of encodeOutlineCacheSseEvents(payload)) {
