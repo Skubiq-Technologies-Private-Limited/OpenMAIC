@@ -14,6 +14,8 @@ RUN apk add --no-cache python3 build-base g++ cairo-dev pango-dev jpeg-dev gifli
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/ ./packages/
+# postinstall runs sync-maic-importer + build asserts vendor bundle exists
+COPY scripts/sync-maic-importer.mjs scripts/assert-vendor-maic-importer.mjs ./scripts/
 
 RUN pnpm install --frozen-lockfile
 
@@ -22,6 +24,7 @@ FROM base AS builder
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages ./packages
+COPY --from=deps /app/public/vendor ./public/vendor
 COPY . .
 
 RUN pnpm build
