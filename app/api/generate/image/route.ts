@@ -30,6 +30,12 @@ import type { ImageProviderId, ImageGenerationOptions } from '@/lib/media/types'
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
+import { applyImagePromptStyleSuffix } from '@/lib/constants/image-generation-style';
+import {
+  imageCachePayload,
+  resolveCourseId,
+  withGenerationCache,
+} from '@/lib/server/generation-cache';
 
 const log = createLogger('ImageGeneration API');
 
@@ -37,7 +43,11 @@ export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as ImageGenerationOptions;
+    const body = (await request.json()) as ImageGenerationOptions & {
+      stageId?: string;
+      classroomId?: string;
+      elementId?: string;
+    };
 
     if (!body.prompt) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing prompt');
@@ -69,21 +79,39 @@ export async function POST(request: NextRequest) {
 
     const baseUrl = resolveImageBaseUrl(providerId, clientBaseUrl);
 
-    // Resolve dimensions from aspect ratio if not explicitly set
     if (!body.width && !body.height && body.aspectRatio) {
       const dims = aspectRatioToDimensions(body.aspectRatio);
       body.width = dims.width;
       body.height = dims.height;
     }
 
-    log.info(
-      `Generating image: provider=${providerId}, model=${clientModel || 'default'}, ` +
-        `prompt="${body.prompt.slice(0, 80)}...", size=${body.width ?? 'auto'}x${body.height ?? 'auto'}`,
-    );
+    const courseId = resolveCourseId(body);
+    const artifactKey = body.elementId?.trim() || `prompt:${body.prompt.slice(0, 120)}`;
+    const generationOptions: ImageGenerationOptions = {
+      ...body,
+      prompt: applyImagePromptStyleSuffix(body.prompt),
+    };
 
-    const result = await generateImage({ providerId, apiKey, baseUrl, model: clientModel }, body);
+    const payload = await withGenerationCache({
+      courseId,
+      artifactType: 'image',
+      artifactKey,
+      generate: async () => {
+        log.info(
+          `Generating image: provider=${providerId}, model=${clientModel || 'default'}, ` +
+            `prompt="${generationOptions.prompt.slice(0, 280)}...", size=${generationOptions.width ?? 'auto'}x${generationOptions.height ?? 'auto'}`,
+        );
 
-    return apiSuccess({ result });
+        const result = await generateImage(
+          { providerId, apiKey, baseUrl, model: clientModel },
+          generationOptions,
+        );
+        return { result };
+      },
+      toCachePayload: (result) => imageCachePayload(result),
+    });
+
+    return apiSuccess(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // Detect content safety filter rejections (e.g. Seedream OutputImageSensitiveContentDetected)

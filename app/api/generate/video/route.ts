@@ -27,6 +27,8 @@ import type { VideoProviderId, VideoGenerationOptions } from '@/lib/media/types'
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
+import { resolveCourseId, withGenerationCache } from '@/lib/server/generation-cache';
+import { isVideoGenerationDisabled } from '@/lib/server/generation-feature-flags';
 
 const log = createLogger('VideoGeneration API');
 
@@ -34,7 +36,15 @@ export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as VideoGenerationOptions;
+    if (isVideoGenerationDisabled()) {
+      return apiError('PROVIDER_DISABLED', 403, 'Video generation is disabled on this server');
+    }
+
+    const body = (await request.json()) as VideoGenerationOptions & {
+      stageId?: string;
+      classroomId?: string;
+      elementId?: string;
+    };
 
     if (!body.prompt) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing prompt');
@@ -65,25 +75,35 @@ export async function POST(request: NextRequest) {
 
     const baseUrl = resolveVideoBaseUrl(providerId, clientBaseUrl);
 
-    // Normalize options against provider capabilities
     const options = normalizeVideoOptions(providerId, body);
+    const courseId = resolveCourseId(body);
+    const artifactKey = body.elementId?.trim() || `prompt:${body.prompt.slice(0, 120)}`;
 
-    log.info(
-      `Generating video: provider=${providerId}, model=${clientModel || 'default'}, ` +
-        `prompt="${body.prompt.slice(0, 80)}...", duration=${options.duration ?? 'auto'}, ` +
-        `aspect=${options.aspectRatio ?? 'auto'}, resolution=${options.resolution ?? 'auto'}`,
-    );
+    const payload = await withGenerationCache({
+      courseId,
+      artifactType: 'video',
+      artifactKey,
+      generate: async () => {
+        log.info(
+          `Generating video: provider=${providerId}, model=${clientModel || 'default'}, ` +
+            `prompt="${body.prompt.slice(0, 80)}...", duration=${options.duration ?? 'auto'}, ` +
+            `aspect=${options.aspectRatio ?? 'auto'}, resolution=${options.resolution ?? 'auto'}`,
+        );
 
-    const result = await generateVideo(
-      { providerId, apiKey, baseUrl, model: clientModel },
-      options,
-    );
+        const result = await generateVideo(
+          { providerId, apiKey, baseUrl, model: clientModel },
+          options,
+        );
 
-    log.info(
-      `Video generated: url=${result.url ? 'yes' : 'no'}, ${result.width}x${result.height}, ${result.duration}s`,
-    );
+        log.info(
+          `Video generated: url=${result.url ? 'yes' : 'no'}, ${result.width}x${result.height}, ${result.duration}s`,
+        );
 
-    return apiSuccess({ result });
+        return { result };
+      },
+    });
+
+    return apiSuccess(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // Detect content safety filter rejections (e.g. Seedance SensitiveContent errors)

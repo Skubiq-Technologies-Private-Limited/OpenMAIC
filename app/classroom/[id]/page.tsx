@@ -14,6 +14,9 @@ import { MediaStageProvider } from '@/lib/contexts/media-stage-context';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
 import { migrateScene } from '@/lib/edit/slide-schema';
 import type { Scene } from '@/lib/types/stage';
+import type { SceneOutline } from '@/lib/types/generation';
+import { persistClassroomSnapshot } from '@/lib/lms/persist-classroom-snapshot';
+import { hydrateCachedTtsForPlayback } from '@/lib/lms/hydrate-cached-tts';
 
 const log = createLogger('Classroom');
 
@@ -27,10 +30,13 @@ export default function ClassroomDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   const generationStartedRef = useRef(false);
+  /** True when hydrated from a finished server snapshot — skip all generation APIs. */
+  const offlinePlaybackRef = useRef(false);
 
   const { generateRemaining, retrySingleOutline, stop } = useSceneGenerator({
     onComplete: () => {
       log.info('[Classroom] All scenes generated');
+      void persistClassroomSnapshot();
     },
   });
 
@@ -46,21 +52,41 @@ export default function ClassroomDetailPage() {
           if (res.ok) {
             const json = await res.json();
             if (json.success && json.classroom) {
-              const { stage, scenes } = json.classroom;
+              const {
+                stage,
+                scenes,
+                outlines: snapshotOutlines,
+                generationComplete: snapshotComplete,
+              } = json.classroom;
               useStageStore.getState().setStage(stage);
               // Normalize legacy slide content (missing schemaVersion) on the
               // way in, same as the store's setScenes/loadFromStorage paths —
               // server snapshots predate the schema field.
               const migrated = (scenes as Scene[]).map(migrateScene);
+              const outlines = (snapshotOutlines as SceneOutline[] | undefined) ?? [];
+              const generationComplete = snapshotComplete === true;
+
               useStageStore.setState({
                 scenes: migrated,
                 currentSceneId: migrated[0]?.id ?? null,
-                // Match `loadFromStorage` semantics: mode is transient UI
-                // state, not persisted with the stage. Reset on every
-                // classroom load so SPA navigation doesn't carry Pro
-                // mode across.
+                outlines,
+                generationComplete,
+                generatingOutlines: [],
                 mode: 'playback',
               });
+
+              if (generationComplete && outlines.length > 0) {
+                offlinePlaybackRef.current = true;
+                const { db } = await import('@/lib/utils/database');
+                await db.stageOutlines.put({
+                  stageId: classroomId,
+                  outlines,
+                  generationComplete: true,
+                  createdAt: Date.now(),
+                  updatedAt: Date.now(),
+                });
+              }
+
               log.info('Loaded from server-side storage:', classroomId);
 
               // Hydrate server-generated agents into IndexedDB + registry.
@@ -116,6 +142,14 @@ export default function ClassroomDetailPage() {
       if (isUserSet !== settings.agentSelectionIsUserSet) {
         settings.setAgentSelectionIsUserSet(isUserSet);
       }
+
+      const finalState = useStageStore.getState();
+      if (finalState.generationComplete && finalState.scenes.length > 0 && finalState.stage) {
+        await hydrateCachedTtsForPlayback(finalState.scenes, {
+          stageId: classroomId,
+          languageDirective: finalState.stage.languageDirective,
+        });
+      }
     } catch (error) {
       log.error('Failed to load classroom:', error);
       setError(error instanceof Error ? error.message : 'Failed to load classroom');
@@ -130,6 +164,7 @@ export default function ClassroomDetailPage() {
     setLoading(true);
     setError(null);
     generationStartedRef.current = false;
+    offlinePlaybackRef.current = false;
 
     // Clear previous classroom's media tasks to prevent cross-classroom contamination.
     // Placeholder IDs (gen_img_1, gen_vid_1) are NOT globally unique across stages,
@@ -149,9 +184,9 @@ export default function ClassroomDetailPage() {
     };
   }, [classroomId, loadClassroom, stop]);
 
-  // Auto-resume generation for pending outlines
+  // Auto-resume generation for pending outlines (skipped for offline snapshot playback)
   useEffect(() => {
-    if (loading || error || generationStartedRef.current) return;
+    if (loading || error || generationStartedRef.current || offlinePlaybackRef.current) return;
 
     const state = useStageStore.getState();
     const { outlines, scenes, stage, generationComplete } = state;
@@ -191,17 +226,15 @@ export default function ClassroomDetailPage() {
       });
     } else if (outlines.length > 0 && stage) {
       // All scenes are generated, but some media may not have finished.
+      generationStartedRef.current = true;
+      useStageStore.getState().markGenerationCompleteIfDone();
+      if (useStageStore.getState().generationComplete) {
+        void persistClassroomSnapshot();
+      }
+      if (offlinePlaybackRef.current) return;
+
       // Resume media generation for any tasks not yet in IndexedDB.
       // generateMediaForOutlines skips already-completed tasks automatically.
-      generationStartedRef.current = true;
-      // The deck reached the classroom already fully materialized (e.g. a
-      // single-slide course, or a deck whose last slide finished in
-      // generation-preview), so generateRemaining's completion path never
-      // ran. Record completion now so a later edit/delete is not treated as
-      // an interrupted generation. No-op if already complete or not all
-      // outlines have scenes.
-      useStageStore.getState().markGenerationCompleteIfDone();
-      // Resume media only for outlines that still have a scene. On a finished
       // deck the user may have deleted a slide, leaving an orphaned outline;
       // generating its media would waste API calls on a slide that is gone.
       const materializedOrders = new Set(scenes.map((s) => s.order));

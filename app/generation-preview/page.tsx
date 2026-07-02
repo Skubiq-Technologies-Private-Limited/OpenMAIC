@@ -449,8 +449,8 @@ function GenerationPreviewContent() {
         imageMapping = currentSession.imageMapping;
       }
 
-      // Create stage client-side
-      const stageId = nanoid(10);
+      // Create stage client-side (use pre-assigned LMS course id when present)
+      const stageId = currentSession.courseId?.trim() || nanoid(10);
       const stage: Stage = {
         id: stageId,
         name: extractTopicFromRequirement(currentSession.requirements.requirement),
@@ -494,6 +494,8 @@ function GenerationPreviewContent() {
                 pdfImages: currentSession.pdfImages,
                 imageMapping,
                 researchContext: currentSession.researchContext,
+                stageId: currentSession.courseId,
+                courseId: currentSession.courseId,
               }),
             ),
             signal,
@@ -736,6 +738,7 @@ function GenerationPreviewContent() {
             headers: getApiHeaders(),
             body: JSON.stringify(
               withThinkingConfig({
+                stageId: stage.id,
                 stageInfo: { name: stage.name, description: stage.description },
                 sceneOutlines: outlines.map((o) => ({
                   title: o.title,

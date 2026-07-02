@@ -182,6 +182,10 @@ export interface SettingsState {
   // 0 = off (serial generation); populated by fetchServerProviders.
   parallelSceneConcurrency: number;
 
+  // Server-wide generation locks (from /api/server-providers).
+  serverVideoGenerationDisabled: boolean;
+  serverWebSearchDisabled: boolean;
+
   // Auto-config lifecycle flag (persisted)
   autoConfigApplied: boolean;
 
@@ -426,6 +430,7 @@ const getDefaultAudioConfig = () => ({
       modelId: 'kokoro-v1',
       enabled: true,
     },
+    'sarvam-tts': { apiKey: '', baseUrl: '', modelId: 'bulbul:v3', enabled: true },
     // Browser-native is OFF by default — fully opt-in. Native voice quality is
     // poor; it must never be a silent default (#665).
     'browser-native-tts': { apiKey: '', baseUrl: '', enabled: false },
@@ -874,6 +879,9 @@ export const useSettingsStore = create<SettingsState>()(
         // Off until the server reports a concurrency via fetchServerProviders.
         parallelSceneConcurrency: 0,
 
+        serverVideoGenerationDisabled: false,
+        serverWebSearchDisabled: false,
+
         autoConfigApplied: false,
 
         // Web Search settings (use defaults)
@@ -1251,7 +1259,11 @@ export const useSettingsStore = create<SettingsState>()(
               image: Record<string, { models?: string[] }>;
               video: Record<string, Record<string, never>>;
               webSearch: Record<string, Record<string, never>>;
-              generation?: { parallelSceneConcurrency?: number };
+              generation?: {
+                parallelSceneConcurrency?: number;
+                videoGenerationDisabled?: boolean;
+                webSearchDisabled?: boolean;
+              };
             };
 
             set((state) => {
@@ -1607,6 +1619,12 @@ export const useSettingsStore = create<SettingsState>()(
                 }
               }
 
+              const serverVideoDisabled = data.generation?.videoGenerationDisabled === true;
+              const serverWebSearchDisabled = data.generation?.webSearchDisabled === true;
+              if (serverVideoDisabled) {
+                autoVideoEnabled = false;
+              }
+
               // (LLM first-load auto-select removed: the symmetric provider
               // recovery + resolveSelectedModel above now resolve LLM provider
               // and model atomically at the source, covering server-configured
@@ -1627,6 +1645,8 @@ export const useSettingsStore = create<SettingsState>()(
                   0,
                   Math.floor(data.generation?.parallelSceneConcurrency ?? 0),
                 ),
+                serverVideoGenerationDisabled: serverVideoDisabled,
+                serverWebSearchDisabled,
                 autoConfigApplied: true,
                 // Validated selections
                 ...(validLLMProvider !== state.providerId && {
@@ -1660,6 +1680,7 @@ export const useSettingsStore = create<SettingsState>()(
                 }),
                 ...(shouldDisableImage && { imageGenerationEnabled: false }),
                 ...(shouldDisableVideo && { videoGenerationEnabled: false }),
+                ...(serverVideoDisabled && { videoGenerationEnabled: false }),
                 // First-run auto-select overrides validation (autoConfigApplied guard).
                 // On first sync, auto-select picks the best provider. On subsequent syncs,
                 // auto* variables stay undefined so only validation spreads take effect.
@@ -1680,9 +1701,10 @@ export const useSettingsStore = create<SettingsState>()(
                 ...(autoImageEnabled !== undefined && {
                   imageGenerationEnabled: autoImageEnabled,
                 }),
-                ...(autoVideoEnabled !== undefined && {
-                  videoGenerationEnabled: autoVideoEnabled,
-                }),
+                ...(autoVideoEnabled !== undefined &&
+                  !serverVideoDisabled && {
+                    videoGenerationEnabled: autoVideoEnabled,
+                  }),
                 ...(autoTtsEnabled !== undefined && { ttsEnabled: autoTtsEnabled }),
               };
             });

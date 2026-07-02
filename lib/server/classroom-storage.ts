@@ -1,7 +1,9 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import type { NextRequest } from 'next/server';
+import type { SceneOutline } from '@/lib/types/generation';
 import type { Scene, Stage } from '@/lib/types/stage';
+import { isValidCourseId } from '@/lib/constants/course-id';
 
 export const CLASSROOMS_DIR = path.join(process.cwd(), 'data', 'classrooms');
 export const CLASSROOM_JOBS_DIR = path.join(process.cwd(), 'data', 'classroom-jobs');
@@ -38,11 +40,15 @@ export interface PersistedClassroomData {
   id: string;
   stage: Stage;
   scenes: Scene[];
+  /** Scene outlines for offline replay without regeneration. */
+  outlines?: SceneOutline[];
+  /** When true, classroom page skips generation API calls. */
+  generationComplete?: boolean;
   createdAt: string;
 }
 
 export function isValidClassroomId(id: string): boolean {
-  return /^[a-zA-Z0-9_-]+$/.test(id);
+  return isValidCourseId(id);
 }
 
 export async function readClassroom(id: string): Promise<PersistedClassroomData | null> {
@@ -63,6 +69,8 @@ export async function persistClassroom(
     id: string;
     stage: Stage;
     scenes: Scene[];
+    outlines?: SceneOutline[];
+    generationComplete?: boolean;
   },
   baseUrl: string,
 ): Promise<PersistedClassroomData & { url: string }> {
@@ -70,6 +78,8 @@ export async function persistClassroom(
     id: data.id,
     stage: data.stage,
     scenes: data.scenes,
+    ...(data.outlines ? { outlines: data.outlines } : {}),
+    ...(data.generationComplete != null ? { generationComplete: data.generationComplete } : {}),
     createdAt: new Date().toISOString(),
   };
 

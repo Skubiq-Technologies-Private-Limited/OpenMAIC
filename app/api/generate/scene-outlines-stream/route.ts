@@ -37,6 +37,20 @@ import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 import { resolveModelFromRequest } from '@/lib/server/resolve-model';
 import { resolveVocationalActive } from '@/lib/config/feature-flags';
+import {
+  isVideoGenerationDisabled,
+} from '@/lib/server/generation-feature-flags';
+import {
+  isGenerationCacheEnabled,
+  readGenerationCache,
+  resolveCourseId,
+  writeGenerationCache,
+} from '@/lib/server/generation-cache';
+import {
+  encodeOutlineCacheSseEvents,
+  OUTLINE_CACHE_ARTIFACT_KEY,
+  type CachedOutlineResult,
+} from '@/lib/server/generation-cache/outline-cache';
 const log = createLogger('Outlines Stream');
 
 export const maxDuration = 300;
@@ -307,8 +321,14 @@ export async function POST(req: NextRequest) {
       imageMapping?: ImageMapping;
       researchContext?: string;
       agents?: AgentInfo[];
+      stageId?: string;
+      courseId?: string;
     };
     requirementSnippet = requirements?.requirement?.substring(0, 60);
+
+    const courseId = resolveCourseId(body);
+    const interactiveMode = requirements.interactiveMode ?? false;
+    const taskEngineMode = resolveVocationalActive(requirements);
 
     // Build user profile string for language inference context
     const userProfileText =
@@ -351,7 +371,9 @@ export async function POST(req: NextRequest) {
 
     // Build media snippet conditions based on enabled flags.
     const imageGenerationEnabled = req.headers.get('x-image-generation-enabled') === 'true';
-    const videoGenerationEnabled = req.headers.get('x-video-generation-enabled') === 'true';
+    const videoGenerationEnabled =
+      !isVideoGenerationDisabled() &&
+      req.headers.get('x-video-generation-enabled') === 'true';
     const mediaGenerationEnabled = imageGenerationEnabled || videoGenerationEnabled;
     const hasSourceImages = (pdfImages?.length ?? 0) > 0;
 
@@ -359,8 +381,6 @@ export async function POST(req: NextRequest) {
     const teacherContext = formatTeacherPersonaForPrompt(agents);
 
     // Check if Interactive Mode or server-enabled Task Engine mode is enabled.
-    const interactiveMode = requirements.interactiveMode ?? false;
-    const taskEngineMode = resolveVocationalActive(requirements);
     const promptId = taskEngineMode
       ? PROMPT_IDS.TASK_ENGINE_OUTLINES
       : interactiveMode
@@ -420,6 +440,30 @@ export async function POST(req: NextRequest) {
 
         try {
           startHeartbeat();
+
+          if (isGenerationCacheEnabled() && courseId) {
+            const cached = await readGenerationCache(
+              courseId,
+              'scene_outlines',
+              OUTLINE_CACHE_ARTIFACT_KEY,
+            );
+            if (cached?.payloadJson) {
+              const payload = cached.payloadJson as CachedOutlineResult;
+              if (payload.outlines?.length) {
+                log.debug(`Outline cache hit for course ${courseId}`);
+                for (const event of encodeOutlineCacheSseEvents(payload)) {
+                  controller.enqueue(encoder.encode(`data: ${event}\n\n`));
+                }
+                stopHeartbeat();
+                try {
+                  controller.close();
+                } catch {
+                  /* already closed */
+                }
+                return;
+              }
+            }
+          }
 
           const streamParams = visionImages?.length
             ? {
@@ -594,13 +638,29 @@ export async function POST(req: NextRequest) {
           if (parsedOutlines.length > 0) {
             // Replace sequential gen_img_N/gen_vid_N with globally unique IDs
             const uniquifiedOutlines = uniquifyMediaElementIds(parsedOutlines);
-            // Send done event with all outlines
-            const doneEvent = JSON.stringify({
-              type: 'done',
+            const outlineResult: CachedOutlineResult = {
               outlines: uniquifiedOutlines,
               languageDirective: languageDirective || DEFAULT_LANGUAGE_DIRECTIVE,
               courseTitle: courseTitle || undefined,
               taskEngineMode,
+            };
+
+            if (isGenerationCacheEnabled() && courseId) {
+              void writeGenerationCache({
+                courseId,
+                artifactType: 'scene_outlines',
+                artifactKey: OUTLINE_CACHE_ARTIFACT_KEY,
+                payloadJson: outlineResult as unknown as Record<string, unknown>,
+                courseTitle: courseTitle || null,
+              }).catch((error) => {
+                log.warn(`Outline cache write failed [${courseId}]:`, error);
+              });
+            }
+
+            // Send done event with all outlines
+            const doneEvent = JSON.stringify({
+              type: 'done',
+              ...outlineResult,
             });
             controller.enqueue(encoder.encode(`data: ${doneEvent}\n\n`));
           } else {

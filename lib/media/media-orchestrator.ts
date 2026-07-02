@@ -115,11 +115,11 @@ async function generateSingleMedia(
     let mimeType: string;
 
     if (req.type === 'image') {
-      const result = await callImageApi(req, abortSignal);
+      const result = await callImageApi(req, stageId, abortSignal);
       resultUrl = result.url;
       mimeType = 'image/png';
     } else {
-      const result = await callVideoApi(req, abortSignal);
+      const result = await callVideoApi(req, stageId, abortSignal);
       resultUrl = result.url;
       posterUrl = result.poster;
       mimeType = 'video/mp4';
@@ -185,6 +185,7 @@ async function generateSingleMedia(
 
 async function callImageApi(
   req: MediaGenerationRequest,
+  stageId: string,
   abortSignal?: AbortSignal,
 ): Promise<{ url: string }> {
   const settings = useSettingsStore.getState();
@@ -203,6 +204,8 @@ async function callImageApi(
       prompt: req.prompt,
       aspectRatio: req.aspectRatio,
       style: req.style,
+      stageId,
+      elementId: req.elementId,
     }),
     signal: abortSignal,
   });
@@ -225,6 +228,7 @@ async function callImageApi(
 
 async function callVideoApi(
   req: MediaGenerationRequest,
+  stageId: string,
   abortSignal?: AbortSignal,
 ): Promise<{ url: string; poster?: string }> {
   const settings = useSettingsStore.getState();
@@ -242,6 +246,8 @@ async function callVideoApi(
     body: JSON.stringify({
       prompt: req.prompt,
       aspectRatio: req.aspectRatio,
+      stageId,
+      elementId: req.elementId,
     }),
     signal: abortSignal,
   });

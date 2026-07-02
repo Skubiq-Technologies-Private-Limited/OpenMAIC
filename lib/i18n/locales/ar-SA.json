@@ -1164,6 +1164,7 @@
     "providerDoubaoTTS": "Doubao TTS 2.0 (فولكينجين)",
     "providerElevenLabsTTS": "ElevenLabs TTS",
     "providerMiniMaxTTS": "MiniMax TTS",
+    "providerSarvamTTS": "Sarvam TTS (Bulbul)",
     "providerLemonadeTTS": "Lemonade TTS (محلي)",
     "providerBrowserNativeTTS": "تحويل النص إلى كلام المدمج في المتصفح",
     "voxcpmBackend": "الخلفية",

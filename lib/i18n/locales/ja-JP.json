@@ -1164,6 +1164,7 @@
     "providerDoubaoTTS": "Doubao TTS 2.0（火山エンジン）",
     "providerElevenLabsTTS": "ElevenLabs TTS",
     "providerMiniMaxTTS": "MiniMax TTS",
+    "providerSarvamTTS": "Sarvam TTS (Bulbul)",
     "providerLemonadeTTS": "Lemonade TTS（ローカル）",
     "providerBrowserNativeTTS": "ブラウザネイティブTTS",
     "voxcpmBackend": "バックエンド",

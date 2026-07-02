@@ -21,6 +21,11 @@ import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 import { VOXCPM_AUTO_VOICE_ID, VOXCPM_TTS_PROVIDER_ID } from '@/lib/audio/voxcpm';
+import {
+  resolveCourseId,
+  ttsCachePayload,
+  withGenerationCache,
+} from '@/lib/server/generation-cache';
 
 const log = createLogger('TTS API');
 
@@ -32,7 +37,16 @@ export async function POST(req: NextRequest) {
   let audioId: string | undefined;
   try {
     const body = await req.json();
-    const { text, ttsModelId, ttsSpeed, ttsApiKey, ttsBaseUrl, ttsProviderOptions } = body as {
+    const {
+      text,
+      ttsModelId,
+      ttsSpeed,
+      ttsApiKey,
+      ttsBaseUrl,
+      ttsProviderOptions,
+      stageId,
+      classroomId,
+    } = body as {
       text: string;
       audioId: string;
       ttsProviderId: TTSProviderId;
@@ -42,6 +56,8 @@ export async function POST(req: NextRequest) {
       ttsApiKey?: string;
       ttsBaseUrl?: string;
       ttsProviderOptions?: Record<string, unknown>;
+      stageId?: string;
+      classroomId?: string;
     };
     ttsProviderId = body.ttsProviderId;
     ttsVoice = body.ttsVoice;
@@ -110,18 +126,26 @@ export async function POST(req: NextRequest) {
       providerOptions: ttsProviderOptions,
     };
 
-    log.info(
-      `Generating TTS: provider=${ttsProviderId}, model=${config.modelId || 'default'}, voice=${ttsVoice}, ` +
-        `registeredVoiceId=${voxcpmRegisteredVoiceId || 'none'}, audioId=${audioId}, textLen=${text.length}`,
-    );
+    const courseId = resolveCourseId(body);
 
-    // Generate audio
-    const { audio, format } = await generateTTS(config, text);
+    const payload = await withGenerationCache({
+      courseId,
+      artifactType: 'tts',
+      artifactKey: audioId,
+      generate: async () => {
+        log.info(
+          `Generating TTS: provider=${ttsProviderId}, model=${config.modelId || 'default'}, voice=${ttsVoice}, ` +
+            `registeredVoiceId=${voxcpmRegisteredVoiceId || 'none'}, audioId=${audioId}, textLen=${text.length}`,
+        );
 
-    // Convert to base64
-    const base64 = Buffer.from(audio).toString('base64');
+        const { audio, format } = await generateTTS(config, text);
+        const base64 = Buffer.from(audio).toString('base64');
+        return { audioId, base64, format };
+      },
+      toCachePayload: (result) => ttsCachePayload({ ...result, audioId: result.audioId ?? '' }),
+    });
 
-    return apiSuccess({ audioId, base64, format });
+    return apiSuccess(payload);
   } catch (error) {
     log.error(
       `TTS generation failed [provider=${ttsProviderId ?? 'unknown'}, voice=${ttsVoice ?? 'unknown'}, audioId=${audioId ?? 'unknown'}]:`,

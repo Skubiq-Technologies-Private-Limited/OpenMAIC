@@ -1164,6 +1164,7 @@
     "providerDoubaoTTS": "Doubao TTS 2.0 (Volcengine)",
     "providerElevenLabsTTS": "ElevenLabs TTS",
     "providerMiniMaxTTS": "MiniMax TTS",
+    "providerSarvamTTS": "Sarvam TTS (Bulbul)",
     "providerLemonadeTTS": "Lemonade TTS (Локальный)",
     "providerBrowserNativeTTS": "Встроенный TTS браузера",
     "voxcpmBackend": "Бэкенд",

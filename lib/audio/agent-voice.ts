@@ -19,6 +19,7 @@ import {
   VOXCPM_TTS_PROVIDER_ID,
   normalizeVoxCPMBackend,
 } from '@/lib/audio/voxcpm';
+import { SARVAM_TTS_PROVIDER_ID, mapLanguageToSarvamTarget } from '@/lib/audio/sarvam';
 import { useSettingsStore } from '@/lib/store/settings';
 
 interface TTSProviderConfigShape {
@@ -76,6 +77,10 @@ export async function resolveAgentVoiceOptions(
   agent: AgentConfig | undefined,
   opts: AgentVoiceResolveOptions,
 ): Promise<Record<string, unknown> | undefined> {
+  if (opts.providerId === SARVAM_TTS_PROVIDER_ID) {
+    const targetLanguageCode = mapLanguageToSarvamTarget(opts.language);
+    return targetLanguageCode ? { targetLanguageCode } : undefined;
+  }
   if (opts.providerId !== VOXCPM_TTS_PROVIDER_ID) return undefined;
   return {
     ...(opts.providerConfig?.providerOptions || {}),

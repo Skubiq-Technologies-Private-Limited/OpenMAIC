@@ -73,6 +73,7 @@ export function GenerationToolbar({
   const setPDFProvider = useSettingsStore((s) => s.setPDFProvider);
   const webSearchProviderId = useSettingsStore((s) => s.webSearchProviderId);
   const webSearchProvidersConfig = useSettingsStore((s) => s.webSearchProvidersConfig);
+  const serverWebSearchDisabled = useSettingsStore((s) => s.serverWebSearchDisabled);
   const setWebSearchProvider = useSettingsStore((s) => s.setWebSearchProvider);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -86,7 +87,9 @@ export function GenerationToolbar({
       !!webSearchConfig?.apiKey ||
       !!webSearchConfig?.isServerConfigured
     : false;
-  const webSearchAvailable = Object.values(WEB_SEARCH_PROVIDERS).some((provider) => {
+  const webSearchAvailable =
+    !serverWebSearchDisabled &&
+    Object.values(WEB_SEARCH_PROVIDERS).some((provider) => {
     const cfg = webSearchProvidersConfig[provider.id];
     return !provider.requiresApiKey || !!cfg?.apiKey || !!cfg?.isServerConfigured;
   });

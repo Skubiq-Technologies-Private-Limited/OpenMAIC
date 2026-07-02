@@ -101,6 +101,11 @@ import {
   normalizeVoxCPMBackend,
   type VoxCPMProviderOptions,
 } from './voxcpm';
+import {
+  SARVAM_DEFAULT_BASE_URL,
+  SARVAM_TTS_PROVIDER_ID,
+  mapLanguageToSarvamTarget,
+} from './sarvam';
 
 /**
  * Result of TTS generation
@@ -177,6 +182,9 @@ export async function generateTTS(
 
     case 'lemonade-tts':
       return await generateLemonadeTTS(config, text);
+
+    case 'sarvam-tts':
+      return await generateSarvamTTS(config, text);
 
     case 'browser-native-tts':
       throw new Error(
@@ -758,6 +766,65 @@ async function generateMiniMaxTTS(
     audio,
     format: data?.extra_info?.audio_format || config.format || 'mp3',
   };
+}
+
+/**
+ * Sarvam AI TTS implementation (Bulbul REST API).
+ * @see https://docs.sarvam.ai/api-reference-docs/text-to-speech/convert
+ */
+async function generateSarvamTTS(
+  config: TTSModelConfig,
+  text: string,
+): Promise<TTSGenerationResult> {
+  const baseUrl = (config.baseUrl || TTS_PROVIDERS[SARVAM_TTS_PROVIDER_ID].defaultBaseUrl || SARVAM_DEFAULT_BASE_URL).replace(
+    /\/$/,
+    '',
+  );
+  const modelId = config.modelId || TTS_PROVIDERS[SARVAM_TTS_PROVIDER_ID].defaultModelId;
+  const speaker = config.voice || TTS_PROVIDERS[SARVAM_TTS_PROVIDER_ID].voices[0]?.id || 'shubh';
+  const format = config.format || 'mp3';
+  const voiceInfo = TTS_PROVIDERS[SARVAM_TTS_PROVIDER_ID].voices.find((v) => v.id === speaker);
+  const providerOptions = config.providerOptions || {};
+  const targetLanguageCode =
+    (typeof providerOptions.targetLanguageCode === 'string' && providerOptions.targetLanguageCode) ||
+    mapLanguageToSarvamTarget(
+      typeof providerOptions.language === 'string' ? providerOptions.language : undefined,
+    ) ||
+    voiceInfo?.language ||
+    'en-IN';
+  const pace = Math.min(2.0, Math.max(0.5, config.speed ?? 1.0));
+
+  const response = await fetch(`${baseUrl}/text-to-speech`, {
+    method: 'POST',
+    headers: {
+      'api-subscription-key': config.apiKey!,
+      'Content-Type': 'application/json; charset=utf-8',
+    },
+    body: JSON.stringify({
+      text,
+      target_language_code: targetLanguageCode,
+      model: modelId,
+      speaker,
+      pace,
+      speech_sample_rate: '24000',
+      output_audio_codec: format,
+    }),
+  });
+
+  if (!response.ok) {
+    throwIfTtsRateLimited('Sarvam', response.status);
+    const errorText = await response.text().catch(() => response.statusText);
+    throw new Error(`Sarvam TTS API error: ${errorText || response.statusText}`);
+  }
+
+  const data = (await response.json()) as { audios?: string[]; audio?: string };
+  const audioBase64 = Array.isArray(data.audios) ? data.audios[0] : data.audio;
+  if (!audioBase64 || typeof audioBase64 !== 'string') {
+    throw new Error(`Sarvam TTS error: No audio returned. Response: ${JSON.stringify(data)}`);
+  }
+
+  const audio = Uint8Array.from(Buffer.from(audioBase64, 'base64'));
+  return { audio, format };
 }
 
 /**

@@ -8,6 +8,10 @@ import {
   getServerWebSearchProviders,
   getParallelSceneConcurrency,
 } from '@/lib/server/provider-config';
+import {
+  isVideoGenerationDisabled,
+  isWebSearchDisabled,
+} from '@/lib/server/generation-feature-flags';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 
@@ -25,6 +29,8 @@ export async function GET() {
       webSearch: getServerWebSearchProviders(),
       generation: {
         parallelSceneConcurrency: getParallelSceneConcurrency(),
+        videoGenerationDisabled: isVideoGenerationDisabled(),
+        webSearchDisabled: isWebSearchDisabled(),
       },
     });
   } catch (error) {

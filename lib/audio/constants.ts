@@ -42,6 +42,12 @@ import {
   VOXCPM_TTS_PROVIDER_ID,
   VOXCPM_VLLM_MODEL_ID,
 } from './voxcpm';
+import {
+  SARVAM_DEFAULT_BASE_URL,
+  SARVAM_TTS_PROVIDER_ID,
+  SARVAM_V2_SPEAKER_IDS,
+  SARVAM_V3_SPEAKER_IDS,
+} from './sarvam';
 
 /**
  * Default supported languages for custom OpenAI-compatible ASR providers.
@@ -928,6 +934,34 @@ export const TTS_PROVIDERS: Record<BuiltInTTSProviderId, TTSProviderConfig> = {
     speedRange: { min: 0.7, max: 1.2, default: 1.0 },
   },
 
+  'sarvam-tts': {
+    id: SARVAM_TTS_PROVIDER_ID,
+    name: 'Sarvam TTS',
+    requiresApiKey: true,
+    defaultBaseUrl: SARVAM_DEFAULT_BASE_URL,
+    models: [
+      { id: 'bulbul:v3', name: 'Bulbul v3' },
+      { id: 'bulbul:v2', name: 'Bulbul v2' },
+    ],
+    defaultModelId: 'bulbul:v3',
+    voices: [
+      ...SARVAM_V3_SPEAKER_IDS.map((id) => ({
+        id,
+        name: id.charAt(0).toUpperCase() + id.slice(1),
+        language: 'en-IN',
+        compatibleModels: ['bulbul:v3'],
+      })),
+      ...SARVAM_V2_SPEAKER_IDS.map((id) => ({
+        id,
+        name: id.charAt(0).toUpperCase() + id.slice(1),
+        language: 'hi-IN',
+        compatibleModels: ['bulbul:v2'],
+      })),
+    ],
+    supportedFormats: ['mp3', 'wav', 'opus', 'flac', 'aac', 'pcm'],
+    speedRange: { min: 0.5, max: 2.0, default: 1.0 },
+  },
+
   'browser-native-tts': {
     id: 'browser-native-tts',
     name: '浏览器原生 (Web Speech API)',
@@ -1283,6 +1317,7 @@ export const DEFAULT_TTS_VOICES: Record<BuiltInTTSProviderId, string> = {
   'elevenlabs-tts': 'EXAVITQu4vr4xnSDxMaL',
   'minimax-tts': 'female-yujie',
   'lemonade-tts': 'af_heart',
+  'sarvam-tts': 'shubh',
   'browser-native-tts': 'default',
 };
 
@@ -1296,6 +1331,7 @@ export const DEFAULT_TTS_MODELS: Record<BuiltInTTSProviderId, string> = {
   'elevenlabs-tts': 'eleven_multilingual_v2',
   'minimax-tts': 'speech-2.8-hd',
   'lemonade-tts': 'kokoro-v1',
+  'sarvam-tts': 'bulbul:v3',
   'browser-native-tts': '',
 };
 

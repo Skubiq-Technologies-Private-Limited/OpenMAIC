@@ -915,10 +915,10 @@ async function generateQuizContent(
   aiCall: AICallFn,
   languageDirective?: string,
 ): Promise<GeneratedQuizContent | null> {
-  const quizConfig = outline.quizConfig || {
-    questionCount: 3,
-    difficulty: 'medium',
-    questionTypes: ['single'],
+  const quizConfig = {
+    questionCount: outline.quizConfig?.questionCount ?? 3,
+    difficulty: outline.quizConfig?.difficulty ?? 'medium',
+    questionTypes: outline.quizConfig?.questionTypes ?? ['single'],
   };
 
   const prompts = buildPrompt(PROMPT_IDS.QUIZ_CONTENT, {

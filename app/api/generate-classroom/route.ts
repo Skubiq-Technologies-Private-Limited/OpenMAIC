@@ -6,6 +6,10 @@ import { runClassroomGenerationJob } from '@/lib/server/classroom-job-runner';
 import { createClassroomGenerationJob } from '@/lib/server/classroom-job-store';
 import { buildRequestOrigin } from '@/lib/server/classroom-storage';
 import { createLogger } from '@/lib/logger';
+import {
+  isVideoGenerationDisabled,
+  isWebSearchDisabled,
+} from '@/lib/server/generation-feature-flags';
 
 const log = createLogger('GenerateClassroom API');
 
@@ -33,6 +37,12 @@ export async function POST(req: NextRequest) {
       ...(rawBody.enableTTS != null ? { enableTTS: rawBody.enableTTS } : {}),
       ...(rawBody.agentMode ? { agentMode: rawBody.agentMode } : {}),
     };
+    if (isWebSearchDisabled()) {
+      body.enableWebSearch = false;
+    }
+    if (isVideoGenerationDisabled()) {
+      body.enableVideoGeneration = false;
+    }
     const { requirement } = body;
 
     if (!requirement) {

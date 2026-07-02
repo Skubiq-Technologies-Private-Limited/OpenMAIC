@@ -218,8 +218,10 @@ export async function generateAndStoreTTS(
   language?: string,
   signal?: AbortSignal,
   retryOptions?: ClientRetryOptions<TTSApiResponse>,
+  stageId?: string,
 ): Promise<void> {
   const settings = useSettingsStore.getState();
+  const resolvedStageId = stageId ?? useStageStore.getState().stage?.id;
   if (settings.ttsProviderId === 'browser-native-tts') return;
   // Don't server-generate against a disabled/unconfigured provider (#665).
   if (
@@ -248,6 +250,7 @@ export async function generateAndStoreTTS(
         body: JSON.stringify({
           text,
           audioId,
+          stageId: resolvedStageId,
           ttsProviderId: settings.ttsProviderId,
           ttsModelId: ttsProviderConfig?.modelId,
           ttsVoice: settings.ttsVoice,

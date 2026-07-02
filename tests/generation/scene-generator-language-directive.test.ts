@@ -88,6 +88,23 @@ describe('scene-generator language directive threading (issue #472)', () => {
       expect(lastUser()).toContain(DIRECTIVE);
       expect(lastUser()).not.toContain('{{languageDirective}}');
     });
+
+    it('defaults missing quizConfig.questionTypes when outline has partial quizConfig', async () => {
+      const { aiCall, lastUser } = makeCapturingAiCall(JSON.stringify([]));
+
+      await generateSceneContent(
+        baseOutline({
+          type: 'quiz',
+          quizConfig: {
+            questionCount: 2,
+            difficulty: 'medium',
+          },
+        }),
+        aiCall,
+      );
+
+      expect(lastUser()).toContain('single');
+    });
   });
 
   describe('actions generation', () => {

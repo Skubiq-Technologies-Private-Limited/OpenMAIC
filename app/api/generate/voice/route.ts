@@ -30,6 +30,7 @@ import {
   getVoiceRegistrationAdapter,
   type VoiceRegistrationConfig,
 } from '@/lib/audio/voice-registration';
+import { resolveCourseId, withGenerationCache } from '@/lib/server/generation-cache';
 
 const log = createLogger('Voice Registration API');
 
@@ -49,6 +50,8 @@ export async function POST(req: NextRequest) {
       ttsApiKey?: string;
       ttsBaseUrl?: string;
       ttsModelId?: string;
+      stageId?: string;
+      classroomId?: string;
     };
     providerId = typeof body.providerId === 'string' ? body.providerId : undefined;
     voiceId = typeof body.voiceId === 'string' ? body.voiceId.trim() : undefined;
@@ -104,41 +107,58 @@ export async function POST(req: NextRequest) {
       model: resolveTTSModel(providerId, body.ttsModelId),
     };
 
-    // Already registered → no-op (also avoids a redundant re-register when the
-    // client offered a cached clip but the voice is still live on the backend).
-    if (await adapter.voiceExists(cfg, voiceId)) {
-      return apiSuccess({ voiceId, registered: true });
-    }
+    const courseId = resolveCourseId(body);
 
-    // Not present, but the client has the cached reference clip → re-register it
-    // (register-on-invalid; preserves the original timbre instead of re-synthesizing).
-    if (body.referenceAudioBase64) {
-      await adapter.registerVoice(cfg, {
-        voiceId,
-        referenceAudioBase64: body.referenceAudioBase64,
-        mimeType: body.mimeType,
-      });
-      return apiSuccess({ voiceId, registered: true });
-    }
+    const payload = await withGenerationCache({
+      courseId,
+      artifactType: 'voice',
+      artifactKey: voiceId,
+      generate: async () => {
+        if (await adapter.voiceExists(cfg, voiceId ?? '')) {
+          return { voiceId, registered: true };
+        }
 
-    // First use → bootstrap-synthesize the descriptor, register, return the clip.
-    const clip = await adapter.bootstrapReferenceClip(cfg, {
-      design: design!,
-      language: body.language,
-    });
-    await adapter.registerVoice(cfg, {
-      voiceId,
-      referenceAudioBase64: clip.referenceAudioBase64,
-      mimeType: clip.mimeType,
+        if (body.referenceAudioBase64) {
+          await adapter.registerVoice(cfg, {
+            voiceId: voiceId ?? '',
+            referenceAudioBase64: body.referenceAudioBase64,
+            mimeType: body.mimeType,
+          });
+          return { voiceId, registered: true };
+        }
+
+        const clip = await adapter.bootstrapReferenceClip(cfg, {
+          design: design!,
+          language: body.language,
+        });
+        await adapter.registerVoice(cfg, {
+          voiceId: voiceId ?? '',
+          referenceAudioBase64: clip.referenceAudioBase64,
+          mimeType: clip.mimeType,
+        });
+
+        log.info(`Registered auto voice ${voiceId} for provider ${providerId}`);
+        return {
+          voiceId,
+          registered: true,
+          referenceAudioBase64: clip.referenceAudioBase64,
+          mimeType: clip.mimeType,
+        };
+      },
+      toCachePayload: (result) => {
+        const referenceAudioBase64 =
+          typeof result.referenceAudioBase64 === 'string' ? result.referenceAudioBase64 : undefined;
+        return {
+          payloadJson: result,
+          payloadBlob: referenceAudioBase64
+            ? Buffer.from(referenceAudioBase64, 'base64')
+            : null,
+          mimeType: typeof result.mimeType === 'string' ? result.mimeType : null,
+        };
+      },
     });
 
-    log.info(`Registered auto voice ${voiceId} for provider ${providerId}`);
-    return apiSuccess({
-      voiceId,
-      registered: true,
-      referenceAudioBase64: clip.referenceAudioBase64,
-      mimeType: clip.mimeType,
-    });
+    return apiSuccess(payload);
   } catch (error) {
     log.error(
       `Voice registration failed [provider=${providerId ?? 'unknown'}, voiceId=${voiceId ?? 'unknown'}]:`,

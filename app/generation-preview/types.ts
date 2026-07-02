@@ -10,6 +10,8 @@ import type {
 // Session state stored in sessionStorage
 export interface GenerationSessionState {
   sessionId: string;
+  /** Pre-assigned classroom / course id (LMS entry). Becomes stage.id for generation. */
+  courseId?: string;
   requirements: UserRequirements;
   pdfText: string;
   pdfImages?: PdfImage[];
