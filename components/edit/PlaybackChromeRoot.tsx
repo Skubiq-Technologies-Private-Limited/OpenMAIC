@@ -1013,7 +1013,7 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
     // when entering Pro mode.
     const sceneViewerHeight = (() => {
       const headerHeight = isPresenting ? 0 : 80;
-      const roundtableHeight = mode === 'playback' && !isPresenting ? 192 : 0;
+      const roundtableHeight = mode === 'playback' && !isPresenting ? 128 : 0;
       return `calc(100% - ${headerHeight + roundtableHeight}px)`;
     })();
 
@@ -1046,8 +1046,6 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
                 (isCourseComplete && isPendingScene ? t('stage.courseComplete') : '')
               }
               mode={mode}
-              canEdit={!!canEnterProMode}
-              onToggleEditMode={onEnterProMode}
             />
           )}
 
@@ -1242,10 +1240,8 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
           )}
         </div>
 
-        {/* Chat Area — playback / autonomous always renders it here; Pro
-          (edit) mode unmounts this whole PlaybackChromeRoot, so the
-          edit branch has no chat. */}
-        <div className="flex shrink-0">
+        {/* Chat Area — hidden from UI but kept mounted for messaging backend */}
+        <div className="hidden" aria-hidden="true">
           <ChatArea
             ref={chatAreaRef}
             width={chatAreaWidth}

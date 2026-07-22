@@ -1,6 +1,6 @@
 'use client';
 
-import { Stage } from '@/components/stage';
+import { KioskPlaybackStage } from '@/components/kiosk/kiosk-playback-stage';
 import { ThemeProvider } from '@/lib/hooks/use-theme';
 import { useStageStore } from '@/lib/store';
 import { loadImageMapping } from '@/lib/utils/image-storage';
@@ -17,8 +17,13 @@ import type { Scene } from '@/lib/types/stage';
 import type { SceneOutline } from '@/lib/types/generation';
 import { persistClassroomSnapshot } from '@/lib/lms/persist-classroom-snapshot';
 import { hydrateCachedTtsForPlayback } from '@/lib/lms/hydrate-cached-tts';
+import { isKioskFolderMode } from '@/lib/kiosk/config';
+import { loadKioskClassroom } from '@/lib/kiosk/load-classroom';
+import { hydrateKioskGeneratedAgents } from '@/lib/kiosk/agents';
 
 const log = createLogger('Classroom');
+
+const kioskMode = isKioskFolderMode();
 
 export default function ClassroomDetailPage() {
   const params = useParams();
@@ -35,6 +40,7 @@ export default function ClassroomDetailPage() {
 
   const { generateRemaining, retrySingleOutline, stop } = useSceneGenerator({
     onComplete: () => {
+      if (kioskMode) return;
       log.info('[Classroom] All scenes generated');
       void persistClassroomSnapshot();
     },
@@ -42,9 +48,27 @@ export default function ClassroomDetailPage() {
 
   const loadClassroom = useCallback(async () => {
     try {
-      await loadFromStorage(classroomId);
+      if (kioskMode) {
+        offlinePlaybackRef.current = true;
+        const payload = await loadKioskClassroom(classroomId);
+        useStageStore.getState().setStage(payload.stage);
+        useStageStore.setState({
+          scenes: payload.scenes,
+          currentSceneId: payload.scenes[0]?.id ?? null,
+          outlines: payload.outlines,
+          generationComplete: payload.generationComplete,
+          generatingOutlines: [],
+          mode: 'playback',
+        });
+        hydrateKioskGeneratedAgents(payload.stage);
+        useMediaGenerationStore.setState((s) => ({
+          tasks: { ...s.tasks, ...payload.mediaTasks },
+        }));
+        log.info('Loaded kiosk classroom from folder API:', classroomId);
+        return;
+      }
 
-      // If IndexedDB had no data, try server-side storage (API-generated classrooms)
+      await loadFromStorage(classroomId);
       if (!useStageStore.getState().stage) {
         log.info('No IndexedDB data, trying server-side storage for:', classroomId);
         try {
@@ -164,7 +188,7 @@ export default function ClassroomDetailPage() {
     setLoading(true);
     setError(null);
     generationStartedRef.current = false;
-    offlinePlaybackRef.current = false;
+    offlinePlaybackRef.current = kioskMode;
 
     // Clear previous classroom's media tasks to prevent cross-classroom contamination.
     // Placeholder IDs (gen_img_1, gen_vid_1) are NOT globally unique across stages,
@@ -186,6 +210,7 @@ export default function ClassroomDetailPage() {
 
   // Auto-resume generation for pending outlines (skipped for offline snapshot playback)
   useEffect(() => {
+    if (kioskMode) return;
     if (loading || error || generationStartedRef.current || offlinePlaybackRef.current) return;
 
     const state = useStageStore.getState();
@@ -252,7 +277,7 @@ export default function ClassroomDetailPage() {
           {loading ? (
             <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
               <div className="text-center text-muted-foreground">
-                <p>Loading classroom...</p>
+                <p>{kioskMode ? 'Loading course…' : 'Loading classroom...'}</p>
               </div>
             </div>
           ) : error ? (
@@ -272,7 +297,11 @@ export default function ClassroomDetailPage() {
               </div>
             </div>
           ) : (
-            <Stage onRetryOutline={retrySingleOutline} />
+            {kioskMode ? (
+              <KioskPlaybackStage />
+            ) : (
+              <Stage onRetryOutline={retrySingleOutline} />
+            )}
           )}
         </div>
       </MediaStageProvider>

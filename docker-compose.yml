@@ -10,9 +10,9 @@ services:
     expose:
       - "3000"
     networks:
-      - edukube_default
+      - sims_default
     restart: unless-stopped
 
 networks:
-  edukube_default:
+  sims_default:
     external: true

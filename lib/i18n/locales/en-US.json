@@ -970,7 +970,7 @@
     "selectedAgents": "Selected Agents",
     "required": "Required",
     "agentNames": {
-      "default-1": "AI Teacher",
+      "default-1": "Teacher",
       "default-2": "AI Assistant",
       "default-3": "Class Clown",
       "default-4": "Curious Mind",

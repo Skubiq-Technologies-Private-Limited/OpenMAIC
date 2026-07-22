@@ -1,0 +1,10 @@
+@import '../../../app/globals.css';
+
+@theme inline {
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+}
+
+/* Tailwind v4 auto-scan is scoped to this package — include shared UI trees. */
+@source '../../../components/**/*.{tsx,ts,jsx,js}';
+@source '../../../lib/**/*.{tsx,ts,jsx,js}';

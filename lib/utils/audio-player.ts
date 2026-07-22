@@ -8,6 +8,7 @@
 
 import { db } from '@/lib/utils/database';
 import { createLogger } from '@/lib/logger';
+import { isKioskTtsCacheUrl, resolveKioskTtsPlaybackUrl } from '@/lib/kiosk/tts-audio';
 
 const log = createLogger('AudioPlayer');
 
@@ -29,11 +30,19 @@ export class AudioPlayer {
    */
   public async play(audioId: string, audioUrl?: string): Promise<boolean> {
     try {
-      // 1. Try audioUrl first (server-generated TTS)
+      // 1. Try audioUrl first (server-generated TTS or kiosk TTS cache JSON)
       if (audioUrl) {
         this.stop();
         this.audio = new Audio();
-        this.audio.src = audioUrl;
+
+        let src = audioUrl;
+        if (isKioskTtsCacheUrl(audioUrl)) {
+          const resolved = await resolveKioskTtsPlaybackUrl(audioUrl);
+          if (!resolved) return false;
+          src = resolved;
+        }
+
+        this.audio.src = src;
         if (this.muted) this.audio.volume = 0;
         else this.audio.volume = this.volume;
         this.audio.defaultPlaybackRate = this.playbackRate;

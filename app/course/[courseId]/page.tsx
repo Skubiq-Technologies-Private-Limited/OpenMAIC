@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { isValidLmsCourseId } from '@/lib/constants/lms-entry';
+import { isKioskFolderMode } from '@/lib/kiosk/config';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('Course');
+const kioskMode = isKioskFolderMode();
 
 /**
  * Playback-only entry: `/course/[courseId]`
@@ -30,6 +32,11 @@ export default function CoursePlaybackEntryPage() {
 
     if (!isValidLmsCourseId(courseId)) {
       setError('Invalid course id');
+      return;
+    }
+
+    if (kioskMode) {
+      router.replace(`/classroom/${courseId}`);
       return;
     }
 
