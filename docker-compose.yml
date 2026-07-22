@@ -1,6 +1,6 @@
 services:
   openmaic:
-    image: ${OPENMAIC_IMAGE:-ghcr.io/thu-maic/openmaic:main}
+    image: ${OPENMAIC_IMAGE:-ghcr.io/skubiq-technologies-private-limited/openmaic:main}
     pull_policy: always
     container_name: openmaic_prod
     env_file:
