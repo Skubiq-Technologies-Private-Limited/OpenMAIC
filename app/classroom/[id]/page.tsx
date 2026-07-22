@@ -1,6 +1,7 @@
 'use client';
 
 import { KioskPlaybackStage } from '@/components/kiosk/kiosk-playback-stage';
+import { Stage } from '@/components/stage';
 import { ThemeProvider } from '@/lib/hooks/use-theme';
 import { useStageStore } from '@/lib/store';
 import { loadImageMapping } from '@/lib/utils/image-storage';

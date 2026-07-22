@@ -3,9 +3,10 @@
  *
  * 1. Set `USE_LOCAL_KIOSK_FIXTURE` below to `true`, OR
  *    build with `NEXT_PUBLIC_KIOSK_LOCAL_FIXTURE=true`
- * 2. Replace the import with your course JSON (same shape as `data/classrooms/*.json`)
+ * 2. Replace the import with your course JSON (same shape as `data/classrooms/*.json`),
+ *    or copy a file from `data/classrooms/` into `lib/kiosk/fixtures/` for local use.
  */
-import courseJson from '../../data/classrooms/english-8th-science-part1-exploring-forces.json';
+import courseJson from './fixtures/sample-classroom.json';
 
 /** Flip to `true` for quick local UI testing without Flutter / test server. */
 export const USE_LOCAL_KIOSK_FIXTURE =

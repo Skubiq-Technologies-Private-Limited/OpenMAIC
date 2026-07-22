@@ -1,0 +1,28 @@
+{
+  "stage": {
+    "id": "local-fixture",
+    "name": "Local kiosk fixture",
+    "createdAt": 1,
+    "updatedAt": 1
+  },
+  "scenes": [
+    {
+      "id": "scene-1",
+      "stageId": "local-fixture",
+      "type": "slide",
+      "title": "Sample slide",
+      "order": 1,
+      "content": {
+        "type": "slide",
+        "canvas": {
+          "id": "canvas-1",
+          "elements": []
+        }
+      },
+      "createdAt": 1,
+      "updatedAt": 1
+    }
+  ],
+  "outlines": [],
+  "generationComplete": true
+}
