@@ -296,12 +296,10 @@ export default function ClassroomDetailPage() {
                 </button>
               </div>
             </div>
+          ) : kioskMode ? (
+            <KioskPlaybackStage />
           ) : (
-            {kioskMode ? (
-              <KioskPlaybackStage />
-            ) : (
-              <Stage onRetryOutline={retrySingleOutline} />
-            )}
+            <Stage onRetryOutline={retrySingleOutline} />
           )}
         </div>
       </MediaStageProvider>
